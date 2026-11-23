@@ -1,0 +1,30 @@
+[project]
+name = "tp5-agentic-ai-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Hajar El Alaoui", email = "elalaouihajar60@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "ddgs>=9.16.1",
+    "faiss-cpu>=1.16.0",
+    "ipykernel>=7.4.0",
+    "langchain>=1.5.2",
+    "langchain-community>=0.4.2",
+    "langchain-experimental>=0.4.2",
+    "langchain-ollama>=1.2.0",
+    "langchain-tavily>=0.2.18",
+    "langchain-text-splitters>=1.2.0",
+    "langgraph>=1.2.24",
+    "pypdf>=7.1.1",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+tp5-agentic-ai-mcp = "tp5_agentic_ai_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14.0"]
+build-backend = "uv_build"
