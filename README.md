@@ -2,13 +2,6 @@
 
 LLM local open source : **qwen3-vl:2b-instruct** via **Ollama** · Embeddings : **nomic-embed-text**
 
-## Contenu
-
-| Dossier / fichier | Partie |
-|---|---|
-| `partie_D_sav/` | **Partie D — Synthèse** : système multi-agents de SAV |
-| `A_langchain_agents.ipynb` | Partie A — rappel LangChain (agents, mémoire, tools, middlewares, guardrails, HITL, RAG agentique) |
-
 ## Partie D — SAV d'un distributeur d'électronique
 
 - **Orchestrateur** (LangGraph) : classe la demande (`documentation` / `garantie`), route vers l'agent spécialisé et termine quand la réponse finale est disponible.

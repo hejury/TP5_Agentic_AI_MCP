@@ -2,3 +2,5 @@
 .env
 __pycache__/
 .ipynb_checkpoints/
+A_langchain_agents.ipynb
+pdfs/

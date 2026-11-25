@@ -6,6 +6,7 @@ dans les manuels techniques (PDF) et retourne une réponse sourcée.
 Lancement :  uv run mcp_server.py
 """
 import base64
+import re
 from pathlib import Path
 
 import pymupdf
@@ -66,18 +67,31 @@ def rechercher(requete, type_doc, k):
 
 
 # ---------- Lecture de la photo jointe ----------
-def decrire_image(image_ref: str) -> str:
-    """Le modèle vision décrit le pictogramme visible sur la photo du client."""
+FIGURES = [d for d in vector_store.docstore._dict.values() if d.metadata["type"] == "figure"]
+
+
+def nom_pictogramme(figure) -> str:
+    """« feuille et vague » à partir de la légende de la figure."""
+    trouve = re.search(r"«\s*(.+?)\s*»", figure.metadata["legende"])
+    return trouve.group(1) if trouve else figure.metadata["legende"]
+
+
+def identifier_pictogramme(image_ref: str):
+    """Le modèle vision compare la photo aux pictogrammes du manuel et choisit le plus ressemblant."""
     chemin = DATA / "images" / f"{image_ref}.png"
     if not chemin.exists():
-        return ""
+        return None, ""
+    choix = "\n".join(f"- « {nom_pictogramme(f)} »" for f in FIGURES)
     image_b64 = base64.b64encode(chemin.read_bytes()).decode()
     message = HumanMessage(content=[
-        {"type": "text", "text": "Décris en une phrase, en français, le pictogramme affiché sur l'écran "
-                                 "de cette imprimante (forme, symboles, couleur du voyant)."},
+        {"type": "text", "text": "Photo de l'écran d'une imprimante. Regarde la forme principale du pictogramme "
+                                 "(ignore la pastille orange avec « ! »). Parmi ces pictogrammes du manuel, lequel "
+                                 f"est affiché ?\n{choix}\nRéponds uniquement par le nom entre guillemets « »."},
         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
     ])
-    return llm.invoke([message]).content
+    reponse = llm.invoke([message]).content.lower()
+    figure = next((f for f in FIGURES if nom_pictogramme(f).lower() in reponse), None)
+    return figure, reponse
 
 
 # ---------- Agent RAG interne ----------
@@ -129,18 +143,19 @@ def rag_multimodal(question: str, image_ref: str = "") -> str:
     et retourner une réponse sourcée. image_ref : référence de la photo jointe par le client
     (par exemple img_px200_01), ou chaîne vide s'il n'y a pas de photo."""
     print(f"[rag_multimodal] question={question!r} image_ref={image_ref!r}")
-    description = decrire_image(image_ref) if image_ref else ""
-    if description:
-        print("[rag_multimodal] description de la photo :", description)
+    figure, avis = identifier_pictogramme(image_ref) if image_ref else (None, "")
+    if image_ref:
+        print("[rag_multimodal] réponse du modèle vision :", avis)
+        print("[rag_multimodal] pictogramme identifié :", figure.metadata["legende"] if figure else "aucun")
 
-    requete = question + (f"\nPhoto jointe : {description}" if description else "")
-    sources = []
+    requete = question + (f"\nPictogramme identifié sur la photo : {figure.metadata['legende']}" if figure else "")
+    sources = [figure] if figure else []
     resultat = creer_agent_rag(sources).invoke({"messages": [HumanMessage(requete)]})
     reponse = resultat["messages"][-1].content
 
     # Repli : si le petit modèle n'a appelé aucun outil, on fait la recherche nous-mêmes
     if not any(isinstance(m, AIMessage) and m.tool_calls for m in resultat["messages"]):
-        figures = rechercher(requete, "figure", 1)
+        figures = [figure] if figure else rechercher(requete, "figure", 1)
         passages = rechercher(requete, "texte", 3)
         sources = figures + passages
         contexte = "\n\n".join(f"[p.{d.metadata['page']}] {d.page_content}" for d in sources)

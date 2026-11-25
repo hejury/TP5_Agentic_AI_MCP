@@ -34,15 +34,18 @@ def consulter_garantie(numero_serie: str) -> dict:
     trouve = re.search(r"PX200-\d{4}", numero_serie.upper())
     numero = trouve.group() if trouve else numero_serie.strip().upper()
     if numero not in registre:
-        return {"numero_serie": numero, "trouve": False}
+        return {"numero_serie": numero, "trouve": False,
+                "conclusion": "Numéro de série introuvable dans le registre des garanties."}
     fiche = registre[numero]
     achat = date.fromisoformat(fiche["date_achat"])
     mois = achat.month - 1 + fiche["duree_mois"]
     fin = achat.replace(year=achat.year + mois // 12, month=mois % 12 + 1)
     restant = (fin - date.today()).days
+    conclusion = (f"SOUS GARANTIE jusqu'au {fin:%d/%m/%Y} ({restant} jours restants)." if restant >= 0
+                  else f"GARANTIE EXPIRÉE depuis le {fin:%d/%m/%Y} : l'appareil n'est plus couvert.")
     return {"numero_serie": numero, "trouve": True, "modele": fiche["modele"],
             "date_achat": fiche["date_achat"], "fin_garantie": fin.isoformat(),
-            "sous_garantie": restant >= 0, "jours_restants": max(restant, 0)}
+            "sous_garantie": restant >= 0, "jours_restants": max(restant, 0), "conclusion": conclusion}
 
 
 def texte(contenu) -> str:
@@ -106,8 +109,9 @@ async def construire_systeme(checkpointer=None, url_mcp: str = URL_MCP):
     )
     agent_gar = create_agent(
         model=llm, tools=[consulter_garantie],
-        system_prompt=("Tu es l'agent garantie du SAV. Appelle consulter_garantie avec le numéro de série, puis "
-                       "indique en français si l'appareil est sous garantie, la date de fin et les jours restants."),
+        system_prompt=("Tu es l'agent garantie du SAV. Appelle consulter_garantie avec le numéro de série. "
+                       "Ta réponse doit reprendre exactement le champ « conclusion » renvoyé par l'outil, "
+                       "puis ajouter la date d'achat. Ne contredis jamais la conclusion."),
     )
 
     async def agent_documentaire(state: SavState):
@@ -126,8 +130,13 @@ async def construire_systeme(checkpointer=None, url_mcp: str = URL_MCP):
 
     async def agent_garantie(state: SavState):
         resultat = await agent_gar.ainvoke({"messages": [HumanMessage(state["question"])]})
-        return {"messages": resultat["messages"][1:], "agent": "agent_garantie",
-                "reponse_finale": resultat["messages"][-1].content}
+        reponse = resultat["messages"][-1].content
+        # Garde-fou : la conclusion du registre doit figurer dans la réponse finale
+        conclusions = [json.loads(texte(m.content)).get("conclusion", "") for m in resultat["messages"]
+                       if isinstance(m, ToolMessage) and texte(m.content).startswith("{")]
+        if conclusions and conclusions[-1] not in reponse:
+            reponse = f"**{conclusions[-1]}**\n\n{reponse}"
+        return {"messages": resultat["messages"][1:], "agent": "agent_garantie", "reponse_finale": reponse}
 
     builder = StateGraph(SavState)
     builder.add_node("orchestrateur", orchestrateur)
