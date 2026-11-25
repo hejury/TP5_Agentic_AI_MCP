@@ -1,0 +1,20 @@
+{
+  "PX200-0042": {
+    "modele": "PX-200",
+    "client": "Client A",
+    "date_achat": "2025-03-14",
+    "duree_mois": 24
+  },
+  "PX200-0007": {
+    "modele": "PX-200",
+    "client": "Client B",
+    "date_achat": "2023-06-02",
+    "duree_mois": 24
+  },
+  "PX200-0315": {
+    "modele": "PX-200",
+    "client": "Client C",
+    "date_achat": "2026-09-30",
+    "duree_mois": 24
+  }
+}
